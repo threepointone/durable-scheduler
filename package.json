@@ -1,0 +1,38 @@
+{
+  "name": "durable-scheduler",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "(cd example; concurrently \"wrangler dev\" \"vite dev\")"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.32",
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tshy": "^3.0.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1",
+    "vitest": "2.0.5",
+    "wrangler": "^3.91.0",
+    "zod": "^3.23.8"
+  },
+  "overrides": {
+    "esbuild": "0.24.0"
+  },
+  "dependencies": {
+    "cron-parser": "^4.9.0"
+  },
+  "tshy": {
+    "project": "./src/tsconfig.json"
+  }
+}
