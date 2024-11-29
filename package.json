@@ -1,14 +1,24 @@
 {
   "name": "durable-scheduler",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "./dist/commonjs/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "(cd example; concurrently \"wrangler dev\" \"vite dev\")"
   },
-  "keywords": [],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "cloudflare",
+    "durable-objects",
+    "scheduler",
+    "cron",
+    "durable-scheduler"
+  ],
   "author": "Sunil Pai <threepointone@gmail.com>",
-  "license": "ISC",
+  "license": "MIT",
   "description": "Sophisticated scheduler for durable tasks, built on Durable Object Alarms.",
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.32",
