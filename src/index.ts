@@ -23,7 +23,7 @@ export type Task = {
 export class Scheduler<Env> extends DurableObject<Env> {
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
-    this.ctx.blockConcurrencyWhile(async () => {
+    void this.ctx.blockConcurrencyWhile(async () => {
       // Create tasks table if it doesn't exist
       this.ctx.storage.sql.exec(
         `
@@ -45,6 +45,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async fetch(_request: Request): Promise<Response> {
     return new Response("Hello World!");
   }
@@ -206,7 +207,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     const base = {
       id: row.id,
       name: row.name,
-      payload: JSON.parse(row.payload as string), // TODO: should probably parse/validate this
+      payload: JSON.parse(row.payload as string) as Record<string, unknown>, // TODO: should probably parse/validate this
     } as Task;
 
     switch (row.type) {
@@ -229,10 +230,11 @@ export class Scheduler<Env> extends DurableObject<Env> {
           type: "cron",
         };
       default:
-        throw new Error(`Unknown task type: ${row.type}`);
+        throw new Error(`Unknown task type: ${row.type as string}`);
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async executeTask(task: Task): Promise<void> {
     // This is where you would implement the actual task execution
     // eslint-disable-next-line no-console
@@ -244,6 +246,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     return interval.next().toDate();
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async query(
     criteria: {
       name?: string;

@@ -30,6 +30,7 @@ describe("Hello World worker", () => {
     const stub = getStub(env);
     const id = "scheduled-task-001";
     const time = new Date(Date.now() + 10000);
+    // eslint-disable-next-line @typescript-eslint/await-thenable
     const task = await stub.scheduleTask({
       id,
       name: "test",
@@ -76,6 +77,7 @@ describe("Hello World worker", () => {
     const id = "delayed-task-001";
     const delay = 10000;
     const timestamp = new Date().getTime() + delay;
+    // eslint-disable-next-line @typescript-eslint/await-thenable
     const task = await stub.scheduleTask({
       id,
       name: "test",
@@ -123,6 +125,7 @@ describe("Hello World worker", () => {
     const next = cronParser.parseExpression(cron).next();
     const timestamp = Math.floor(next.toDate().getTime() / 1000);
 
+    // eslint-disable-next-line @typescript-eslint/await-thenable
     const task = await stub.scheduleTask({
       id,
       name: "test",
