@@ -1,0 +1,31 @@
+name: Prerelease
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  prerelease:
+    if: ${{ github.repository_owner == 'threepointone' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: oven-sh/setup-bun@v1
+
+      - run: npm install -f
+
+      - name: Modify package.json version
+        run: bun .github/version-script.ts
+
+      - run: bun run build
+      - run: bun run check
+
+      - run: npm publish --tag beta
+        env:
+          NPM_PUBLISH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
