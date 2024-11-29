@@ -1,10 +1,14 @@
 {
   "name": "durable-scheduler",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "./dist/commonjs/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/threepointone/durable-scheduler.git"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "(cd example; concurrently \"wrangler dev\" \"vite dev\")"
+    "start": "(cd example; concurrently \"wrangler dev\" \"vite dev\" --kill-others)"
   },
   "files": [
     "dist",
@@ -23,12 +27,14 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.32",
     "@cloudflare/workers-types": "^4.20241112.0",
+    "@tailwindcss/vite": "^4.0.0-beta.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tailwindcss": "^4.0.0-beta.3",
     "tshy": "^3.0.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.1",
