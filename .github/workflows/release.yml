@@ -28,7 +28,7 @@ jobs:
         uses: changesets/action@v1
         with:
           version: bun .github/changeset-version.ts
-          publish: changeset publish
+          publish: npx changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.DURABLE_SCHEDULER_GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
