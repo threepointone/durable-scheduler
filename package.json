@@ -1,15 +1,15 @@
 {
   "name": "durable-scheduler",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.0.1",
+  "main": "./dist/commonjs/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "(cd example; concurrently \"wrangler dev\" \"vite dev\")"
   },
   "keywords": [],
-  "author": "",
+  "author": "Sunil Pai <threepointone@gmail.com>",
   "license": "ISC",
-  "description": "",
+  "description": "Sophisticated scheduler for durable tasks, built on Durable Object Alarms.",
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.32",
     "@cloudflare/workers-types": "^4.20241112.0",
@@ -33,6 +33,26 @@
     "cron-parser": "^4.9.0"
   },
   "tshy": {
-    "project": "./src/tsconfig.json"
-  }
+    "project": "./src/tsconfig.build.json",
+    "exports": {
+      "./package.json": "./package.json",
+      ".": "./src/index.ts"
+    }
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/commonjs/index.d.ts",
+        "default": "./dist/commonjs/index.js"
+      }
+    }
+  },
+  "types": "./dist/commonjs/index.d.ts",
+  "module": "./dist/esm/index.js"
 }
