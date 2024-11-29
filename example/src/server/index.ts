@@ -1,5 +1,6 @@
-import { Scheduler } from "../../../src";
 import { z } from "zod";
+
+import { Scheduler } from "../../../src";
 
 type Env = {
   AI: Ai;
@@ -38,10 +39,7 @@ export class MyScheduler extends Scheduler<Env> {
     const url = new URL(request.url);
 
     if (!url.pathname.startsWith("/api/")) {
-      return fetch(
-        request.url.replace("http://localhost:8787", "http://localhost:5173"),
-        request
-      );
+      return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
     }
 
     const route = `${request.method} ${url.pathname}`;
@@ -82,9 +80,10 @@ export class MyScheduler extends Scheduler<Env> {
             `,
         });
 
-        // @ts-expect-error
+        // @ts-expect-error - this is a string
+        // eslint-disable-next-line no-console
         console.log(result.response);
-        // @ts-expect-error
+        // @ts-expect-error - this is a string
         return new Response(result.response as string);
       }
 
@@ -110,10 +109,7 @@ export default {
     const url = new URL(request.url);
 
     if (!url.pathname.startsWith("/api/")) {
-      return fetch(
-        request.url.replace("http://localhost:8787", "http://localhost:5173"),
-        request
-      );
+      return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
     }
 
     const id = env.SCHEDULER.idFromName("example");

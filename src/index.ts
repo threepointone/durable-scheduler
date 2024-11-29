@@ -1,11 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-
 import cronParser from "cron-parser";
 
 export type Task = {
   id: string;
   name?: string | undefined;
-  payload: any;
+  payload: Record<string, unknown>;
 } & (
   | {
       time: Date;
@@ -203,30 +202,30 @@ export class Scheduler<Env> extends DurableObject<Env> {
     await this.scheduleNextAlarm();
   }
 
-  private rowToTask(row: Record<string, any>): Task {
+  private rowToTask(row: Record<string, unknown>): Task {
     const base = {
       id: row.id,
       name: row.name,
-      payload: JSON.parse(row.payload),
-    };
+      payload: JSON.parse(row.payload as string), // TODO: should probably parse/validate this
+    } as Task;
 
     switch (row.type) {
       case "scheduled":
         return {
           ...base,
-          time: new Date(row.time * 1000),
+          time: new Date((row.time as number) * 1000),
           type: "scheduled",
         };
       case "delayed":
         return {
           ...base,
-          delay: row.delay,
+          delay: row.delay as number,
           type: "delayed",
         };
       case "cron":
         return {
           ...base,
-          cron: row.cron,
+          cron: row.cron as string,
           type: "cron",
         };
       default:
@@ -236,6 +235,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
 
   private async executeTask(task: Task): Promise<void> {
     // This is where you would implement the actual task execution
+    // eslint-disable-next-line no-console
     console.log(`Executing task ${task.id}:`, task);
   }
 
@@ -252,7 +252,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     } = {}
   ): Promise<Task[]> {
     let query = "SELECT * FROM tasks WHERE 1=1";
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (criteria.id) {
       query += " AND id = ?";
@@ -268,10 +268,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
       query += " AND time >= ? AND time <= ?";
       const start = criteria.timeRange.start || new Date(0);
       const end = criteria.timeRange.end || new Date(999999999999999);
-      params.push(
-        Math.floor(start.getTime() / 1000),
-        Math.floor(end.getTime() / 1000)
-      );
+      params.push(Math.floor(start.getTime() / 1000), Math.floor(end.getTime() / 1000));
     }
 
     const result = this.ctx.storage.sql.exec(query, ...params).toArray();

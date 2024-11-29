@@ -1,8 +1,4 @@
-import {
-  env,
-  createExecutionContext,
-  waitOnExecutionContext,
-} from "cloudflare:test";
+import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import cronParser from "cron-parser";
 import { describe, it, expect } from "vitest";
 
@@ -56,7 +52,11 @@ describe("Hello World worker", () => {
     const debug = await stub.getAllTasks();
     expect(debug).toHaveLength(1);
 
-    const { created_at, ...rest } = debug[0];
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      created_at,
+      ...rest
+    } = debug[0];
 
     expect(rest).toMatchInlineSnapshot(`
       {
@@ -97,7 +97,11 @@ describe("Hello World worker", () => {
     const debug = await stub.getAllTasks();
     expect(debug).toHaveLength(1);
 
-    const { created_at, ...rest } = debug[0];
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      created_at,
+      ...rest
+    } = debug[0];
 
     expect(rest).toMatchInlineSnapshot(`
       {
@@ -140,7 +144,11 @@ describe("Hello World worker", () => {
     const debug = await stub.getAllTasks();
     expect(debug).toHaveLength(1);
 
-    const { created_at, ...rest } = debug[0];
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      created_at,
+      ...rest
+    } = debug[0];
 
     expect(rest).toMatchInlineSnapshot(`
     {
