@@ -1,5 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import cronParser from "cron-parser";
+import { migrate } from "./migrate";
+import { migrations } from "./migrations/migrations";
 
 export type Task = {
   id: string;
@@ -35,22 +37,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     void this.ctx.blockConcurrencyWhile(async () => {
-      // Create tasks table if it doesn't exist
-      this.ctx.storage.sql.exec(
-        `
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        type TEXT NOT NULL,
-        payload TEXT,
-        time INTEGER,
-        delay INTEGER,
-        cron TEXT,
-        created_at INTEGER DEFAULT (unixepoch())
-      )
-    `
-      );
-
+      migrate(this.ctx.storage, migrations);
       // Schedule the next task if any exist
       await this.scheduleNextAlarm();
     });
