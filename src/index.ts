@@ -32,10 +32,6 @@ type SqlTask = {
 }
 
 export class Scheduler<Env> extends DurableObject<Env> {
-
-  private operationQueue: Array<OperationQueueItem<any>> = [];
-  private processingOperation: { value: boolean } = { value: false };
-
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     void this.ctx.blockConcurrencyWhile(async () => {
@@ -75,7 +71,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
 
   getAllTasks() {
     // return entire database
-    return this.querySql([{ sql: "SELECT * FROM tasks" }]);
+    return this.querySql<SqlTask>([{ sql: "SELECT * FROM tasks" }]);
   }
 
   private async scheduleNextAlarm() {
@@ -282,25 +278,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
           return { sql, params };
         }) || [];
 
-      const response = this.enqueueOperation<T>(queries, isRaw);
-      return response;
-    } catch (error) {
-      throw new Error("Error running a query in sqlite DO");
-    }
-  }
 
-  private processNextOperation<T>() {
-    if (this.processingOperation.value || !this.operationQueue.length) {
-      return;
-    }
-
-    this.processingOperation.value = true;
-    const operation = this.operationQueue.shift();
-    if (!operation) return;
-
-    const { queries, isRaw, succeed, fail } = operation;
-
-    try {
       let result: QueryResponse<T> | QueryResponse<T>[];
 
       if (queries.length > 1) {
@@ -310,12 +288,17 @@ export class Scheduler<Env> extends DurableObject<Env> {
         result = this.executeQuery<T>(query.sql, query.params, isRaw);
       }
 
-      succeed(result);
+      return {
+        error: null,
+        status: 200,
+        result: result as T[],
+      }
     } catch (error) {
-      fail((error as Error).message);
-    } finally {
-      this.processingOperation.value = false;
-      this.processNextOperation();
+      return {
+        result: null,
+        error: (error as Error).message ?? "Operation failed.",
+        status: 500,
+      }
     }
   }
 
@@ -362,45 +345,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     }
   }
 
-  enqueueOperation<T>(queries: { sql: string; params?: SqliteParams[] }[], isRaw: boolean): QueueResult<T> {
-    let result: QueueResult<T> = { error: "Uninitialised", status: 500, result: null };
-
-    const timeout = setTimeout(() => {
-      result = {
-        result: null,
-        error: "Operation timed out",
-        status: 408,
-      };
-    }, MAX_WAIT_TIME);
-
-    this.operationQueue.push({
-      queries,
-      isRaw,
-      succeed: (value) => {
-        clearTimeout(timeout);
-        result = {
-          error: null,
-          status: 200,
-          result: value as T[],
-        };
-      },
-      fail: (reason?: string) => {
-        clearTimeout(timeout);
-        result = {
-          result: null,
-          error: reason ?? "Operation failed.",
-          status: 500,
-        };
-      },
-    });
-
-    this.processNextOperation();
-
-    return result;
-  }
 }
-
-const MAX_WAIT_TIME = 25 * 1000;
 
 
 export type QueueResult<T> =
@@ -414,13 +359,6 @@ export type QueueResult<T> =
     error: string;
     status: 500 | 408;
   };
-
-type OperationQueueItem<T> = {
-  queries: { sql: string; params?: SqliteParams[] }[];
-  isRaw: boolean;
-  succeed: (value: QueryResponse<T> | QueryResponse<T>[]) => void;
-  fail: (reason?: string) => void;
-};
 
 export type RawSqliteResponse<T> = {
   columns: string[];
