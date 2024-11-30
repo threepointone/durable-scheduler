@@ -22,8 +22,8 @@ describe("Hello World worker", () => {
 
   it("has an empty table when it starts", async () => {
     const stub = getStub(env);
-    const results = await stub.getAllTasks();
-    expect(results).toEqual([]);
+    const { result } = await stub.getAllTasks();
+    expect(result).toEqual([]);
   });
 
   it("can schedule a scheduled task", async () => {
@@ -51,13 +51,13 @@ describe("Hello World worker", () => {
     const timestamp = Math.floor(time.getTime() / 1000);
 
     const debug = await stub.getAllTasks();
-    expect(debug).toHaveLength(1);
+    expect(debug.result).toHaveLength(1);
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       created_at,
       ...rest
-    } = debug[0];
+    } = (debug.result || [])[0];
 
     expect(rest).toMatchInlineSnapshot(`
       {
@@ -97,13 +97,13 @@ describe("Hello World worker", () => {
   `);
 
     const debug = await stub.getAllTasks();
-    expect(debug).toHaveLength(1);
+    expect(debug.result).toHaveLength(1);
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       created_at,
       ...rest
-    } = debug[0];
+    } = (debug.result || [])[0];
 
     expect(rest).toMatchInlineSnapshot(`
       {
@@ -145,13 +145,13 @@ describe("Hello World worker", () => {
     `);
 
     const debug = await stub.getAllTasks();
-    expect(debug).toHaveLength(1);
+    expect(debug.result).toHaveLength(1);
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       created_at,
       ...rest
-    } = debug[0];
+    } = (debug.result || [])[0];
 
     expect(rest).toMatchInlineSnapshot(`
     {
