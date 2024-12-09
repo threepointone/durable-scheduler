@@ -3,33 +3,50 @@ import cronParser from "cron-parser";
 
 export type Task = {
   id: string;
-  name?: string | undefined;
-  payload: Record<string, unknown>;
+  description?: string | undefined;
+  payload?: Record<string, unknown> | undefined;
+  callback?: Callback | undefined;
 } & (
-    | {
+  | {
       time: Date;
       type: "scheduled";
     }
-    | {
-      delay: number;
+  | {
+      delayInSeconds: number;
       type: "delayed";
     }
-    | {
+  | {
       cron: string;
       type: "cron";
     }
-  );
+  | {
+      type: "no-schedule";
+    }
+);
 
-type SqlTask = {
+export type SqlTask = {
   id: string;
-  name: string | null;
-  type: string | null;
+  description: string | null;
   payload: string | null;
+  callback: string | null;
+  type: string | null;
   time: number | null;
-  delay: number | null;
+  delayInSeconds: number | null;
   cron: string | null;
   created_at: number | null;
-}
+};
+
+type Callback =
+  | {
+      type: "webhook";
+      url: string;
+    }
+  | {
+      type: "durable-object";
+      namespace: string;
+      id: string;
+      function: string;
+    };
 
 export class Scheduler<Env> extends DurableObject<Env> {
   constructor(state: DurableObjectState, env: Env) {
@@ -40,11 +57,12 @@ export class Scheduler<Env> extends DurableObject<Env> {
         `
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
-        name TEXT,
-        type TEXT NOT NULL,
+        description TEXT,
         payload TEXT,
+        callback TEXT,
+        type TEXT NOT NULL CHECK(type IN ('scheduled', 'delayed', 'cron', 'no-schedule')),
         time INTEGER,
-        delay INTEGER,
+        delayInSeconds INTEGER,
         cron TEXT,
         created_at INTEGER DEFAULT (unixepoch())
       )
@@ -64,7 +82,6 @@ export class Scheduler<Env> extends DurableObject<Env> {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async fetch(_request: Request): Promise<Response> {
     return new Response("Hello World!");
   }
@@ -82,7 +99,9 @@ export class Scheduler<Env> extends DurableObject<Env> {
       ORDER BY time ASC 
       LIMIT 1
     `;
-    const { result } = this.querySql<SqlTask>([{ sql: query, params: [Math.floor(Date.now() / 1000)] }])
+    const { result } = this.querySql<SqlTask>([
+      { sql: query, params: [Math.floor(Date.now() / 1000)] },
+    ]);
     if (!result) return;
 
     if (result.length > 0 && "time" in result[0]) {
@@ -93,74 +112,135 @@ export class Scheduler<Env> extends DurableObject<Env> {
 
   async scheduleTask(task: Task): Promise<Task> {
     const { id } = task;
-    const payload = JSON.stringify(task.payload);
 
     if ("time" in task && task.time) {
       const timestamp = Math.floor(task.time.getTime() / 1000);
       const query = `
-        INSERT OR REPLACE INTO tasks (id, name, type, payload, time)
-        VALUES (?, ?, 'scheduled', ?, ?)
+        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type, time)
+        VALUES (?, ?, ?, ?, 'scheduled', ?)
       `;
-      this.querySql([{ sql: query, params: [id, task.name || null, payload, timestamp] }])
+      this.querySql([
+        {
+          sql: query,
+          params: [
+            id,
+            task.description || null,
+            JSON.stringify(task.payload || null),
+            JSON.stringify(task.callback || null),
+            timestamp,
+          ],
+        },
+      ]);
 
       await this.scheduleNextAlarm();
 
       return {
         id,
-        name: task.name,
+        description: task.description,
         payload: task.payload,
+        callback: task.callback,
         time: task.time,
         type: "scheduled",
       };
-    } else if ("delay" in task && task.delay) {
-      const time = new Date(Date.now() + task.delay);
+    } else if ("delayInSeconds" in task && task.delayInSeconds) {
+      const time = new Date(Date.now() + task.delayInSeconds * 1000);
       const timestamp = Math.floor(time.getTime() / 1000);
       const query = `
-        INSERT OR REPLACE INTO tasks (id, name, type, payload, delay, time)
-        VALUES (?, ?, 'delayed', ?, ?, ?)
+        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type, delayInSeconds, time)
+        VALUES (?, ?, ?, ?, 'delayed', ?, ?)
       `;
 
-      this.querySql([{ sql: query, params: [id, task.name || null, payload, task.delay, timestamp] }])
+      this.querySql([
+        {
+          sql: query,
+          params: [
+            id,
+            task.description || null,
+            JSON.stringify(task.payload || null),
+            JSON.stringify(task.callback || null),
+            task.delayInSeconds,
+            timestamp,
+          ],
+        },
+      ]);
 
       await this.scheduleNextAlarm();
 
       return {
         id,
-        name: task.name,
+        description: task.description,
         payload: task.payload,
-        delay: task.delay,
+        callback: task.callback,
+        delayInSeconds: task.delayInSeconds,
         type: "delayed",
       };
     } else if ("cron" in task && task.cron) {
       const nextExecutionTime = this.getNextCronTime(task.cron);
       const timestamp = Math.floor(nextExecutionTime.getTime() / 1000);
       const query = `
-        INSERT OR REPLACE INTO tasks (id, name, type, payload, cron, time)
-        VALUES (?, ?, 'cron', ?, ?, ?)
+        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type, cron, time)
+        VALUES (?, ?, ?, ?, 'cron', ?, ?)
       `;
-      this.querySql([{ sql: query, params: [id, task.name || null, payload, task.cron, timestamp] }])
+      this.querySql([
+        {
+          sql: query,
+          params: [
+            id,
+            task.description || null,
+            JSON.stringify(task.payload || null),
+            JSON.stringify(task.callback || null),
+            task.cron,
+            timestamp,
+          ],
+        },
+      ]);
 
       await this.scheduleNextAlarm();
 
       return {
         id,
-        name: task.name,
+        description: task.description,
         payload: task.payload,
+        callback: task.callback,
         cron: task.cron,
         type: "cron",
       };
-    }
+    } else {
+      const query = `
+        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type)
+        VALUES (?, ?, ?, ?, 'no-schedule')
+      `;
+      this.querySql([
+        {
+          sql: query,
+          params: [
+            id,
+            task.description || null,
+            JSON.stringify(task.payload || null),
+            JSON.stringify(task.callback || null),
+          ],
+        },
+      ]);
 
-    throw new Error("Invalid task configuration");
+      return {
+        id,
+        description: task.description,
+        payload: task.payload,
+        callback: task.callback,
+        type: "no-schedule",
+      };
+    }
   }
 
   async alarm(): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
 
     // Get all tasks that should be executed now
-    const { result: tasks } = this.querySql<SqlTask>([{ sql: "SELECT * FROM tasks WHERE time <= ?", params: [now] }])
+    const { result: tasks } = this.querySql<SqlTask>([
+      { sql: "SELECT * FROM tasks WHERE time <= ?", params: [now] },
+    ]);
 
-    for (const row of (tasks || [])) {
+    for (const row of tasks || []) {
       const task = this.rowToTask(row);
       await this.executeTask(task);
 
@@ -169,10 +249,12 @@ export class Scheduler<Env> extends DurableObject<Env> {
         const nextExecutionTime = this.getNextCronTime(task.cron);
         const nextTimestamp = Math.floor(nextExecutionTime.getTime() / 1000);
 
-        this.querySql([{ sql: "UPDATE tasks SET time = ? WHERE id = ?", params: [nextTimestamp, task.id] }])
+        this.querySql([
+          { sql: "UPDATE tasks SET time = ? WHERE id = ?", params: [nextTimestamp, task.id] },
+        ]);
       } else {
         // Delete one-time tasks after execution
-        this.querySql([{ sql: "DELETE FROM tasks WHERE id = ?", params: [task.id] }])
+        this.querySql([{ sql: "DELETE FROM tasks WHERE id = ?", params: [task.id] }]);
       }
     }
 
@@ -183,8 +265,9 @@ export class Scheduler<Env> extends DurableObject<Env> {
   private rowToTask(row: SqlTask): Task {
     const base = {
       id: row.id,
-      name: row.name,
-      payload: JSON.parse(row.payload as string) as Record<string, unknown>, // TODO: should probably parse/validate this
+      description: row.description,
+      payload: row.payload ? (JSON.parse(row.payload) as Record<string, unknown>) : undefined,
+      callback: row.callback ? (JSON.parse(row.callback) as Callback) : undefined,
     } as Task;
 
     switch (row.type) {
@@ -197,7 +280,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
       case "delayed":
         return {
           ...base,
-          delay: row.delay as number,
+          delayInSeconds: row.delayInSeconds as number,
           type: "delayed",
         };
       case "cron":
@@ -211,11 +294,29 @@ export class Scheduler<Env> extends DurableObject<Env> {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   private async executeTask(task: Task): Promise<void> {
     // This is where you would implement the actual task execution
     // eslint-disable-next-line no-console
     console.log(`Executing task ${task.id}:`, task);
+    if ("callback" in task && task.callback) {
+      const { type } = task.callback;
+      if (type === "webhook") {
+        await fetch(task.callback.url, {
+          method: "POST",
+          body: JSON.stringify(task.payload),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      } else if (type === "durable-object") {
+        //@ts-expect-error  yeah whatever
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const stub = this.env[task.callback.namespace].get(task.callback.id);
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await stub[task.callback.function](task.payload);
+      }
+    }
   }
 
   private getNextCronTime(cronExpression: string): Date {
@@ -223,10 +324,9 @@ export class Scheduler<Env> extends DurableObject<Env> {
     return interval.next().toDate();
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async query(
     criteria: {
-      name?: string;
+      description?: string;
       id?: string;
       timeRange?: { start?: Date; end?: Date };
     } = {}
@@ -239,9 +339,9 @@ export class Scheduler<Env> extends DurableObject<Env> {
       params.push(criteria.id);
     }
 
-    if (criteria.name) {
-      query += " AND name = ?";
-      params.push(criteria.name);
+    if (criteria.description) {
+      query += " AND description = ?";
+      params.push(criteria.description);
     }
 
     if (criteria.timeRange) {
@@ -251,13 +351,13 @@ export class Scheduler<Env> extends DurableObject<Env> {
       params.push(Math.floor(start.getTime() / 1000), Math.floor(end.getTime() / 1000));
     }
 
-    const { result } = this.querySql<SqlTask>([{ sql: query, params }])
+    const { result } = this.querySql<SqlTask>([{ sql: query, params }]);
     return result?.map((row) => this.rowToTask(row)) || [];
   }
 
   async cancelTask(id: string): Promise<boolean> {
     const query = "DELETE FROM tasks WHERE id = ?";
-    this.querySql([{ sql: query, params: [id] }])
+    this.querySql([{ sql: query, params: [id] }]);
 
     await this.scheduleNextAlarm();
     return true;
@@ -278,7 +378,6 @@ export class Scheduler<Env> extends DurableObject<Env> {
           return { sql, params };
         }) || [];
 
-
       let result: QueryResponse<T> | QueryResponse<T>[];
 
       if (queries.length > 1) {
@@ -292,73 +391,74 @@ export class Scheduler<Env> extends DurableObject<Env> {
         error: null,
         status: 200,
         result: result as T[],
-      }
+      };
     } catch (error) {
       return {
         result: null,
         error: (error as Error).message ?? "Operation failed.",
         status: 500,
-      }
+      };
     }
   }
 
-  private executeTransaction<T>(queries: { sql: string; params?: SqliteParams[] }[], isRaw: boolean): QueryResponse<T>[] {
+  private executeTransaction<T>(
+    queries: { sql: string; params?: SqliteParams[] }[],
+    isRaw: boolean
+  ): QueryResponse<T>[] {
     return this.ctx.storage.transactionSync(() => {
       const results: QueryResponse<T>[] = [];
 
-      try {
-        for (const queryObj of queries) {
-          const { sql, params } = queryObj;
-          const result = this.executeQuery<T>(sql, params, isRaw);
-          results.push(result);
-        }
-
-        return results;
-      } catch (error) {
-        throw error;
+      for (const queryObj of queries) {
+        const { sql, params } = queryObj;
+        const result = this.executeQuery<T>(sql, params, isRaw);
+        results.push(result);
       }
+
+      return results;
     });
   }
 
-  executeQuery<T>(sql: string, params: SqliteParams[] | undefined, isRaw: boolean): QueryResponse<T> {
-    try {
-      const cursor = params?.length ? this.ctx.storage.sql.exec(sql, ...params) : this.ctx.storage.sql.exec(sql);
+  executeQuery<T>(
+    sql: string,
+    params: SqliteParams[] | undefined,
+    isRaw: boolean
+  ): QueryResponse<T> {
+    const cursor = params?.length
+      ? this.ctx.storage.sql.exec(sql, ...params)
+      : this.ctx.storage.sql.exec(sql);
 
-      let result: QueryResponse<T>;
+    let result: QueryResponse<T>;
 
-      if (isRaw) {
-        result = {
-          columns: cursor.columnNames,
-          rows: (cursor.raw() as any).toArray() as T[],
-          meta: {
-            rows_read: cursor.rowsRead,
-            rows_written: cursor.rowsWritten,
-          },
-        };
-      } else {
-        result = cursor.toArray() as T[];
-      }
-
-      return result;
-    } catch (error) {
-      throw error;
+    if (isRaw) {
+      result = {
+        columns: cursor.columnNames,
+        // @ts-expect-error TODO fix this!!!
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        rows: (cursor.raw() as unknown as T[]).toArray() as T[],
+        meta: {
+          rows_read: cursor.rowsRead,
+          rows_written: cursor.rowsWritten,
+        },
+      };
+    } else {
+      result = cursor.toArray() as T[];
     }
+
+    return result;
   }
-
 }
-
 
 export type QueueResult<T> =
   | {
-    result: T[];
-    error: null;
-    status: 200;
-  }
+      result: T[];
+      error: null;
+      status: 200;
+    }
   | {
-    result: null;
-    error: string;
-    status: 500 | 408;
-  };
+      result: null;
+      error: string;
+      status: 500 | 408;
+    };
 
 export type RawSqliteResponse<T> = {
   columns: string[];

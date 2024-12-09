@@ -48,7 +48,8 @@ export default [
       "no-undef": "off",
       "@typescript-eslint/explicit-module-boundary-types": "off",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/await-thenable": "off",
       // React rules
       ...reactPlugin.configs.recommended.rules,
       "react/react-in-jsx-scope": "off",
