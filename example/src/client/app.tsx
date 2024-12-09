@@ -1,3 +1,4 @@
+import cronstrue from "cronstrue";
 import { useEffect, useState } from "react";
 
 import { type Task as ToDo } from "../../../src";
@@ -6,6 +7,7 @@ function fetchTodos(callback: (todos: ToDo[]) => void) {
   return fetch("/parties/to-dos/username/api/get-todos")
     .then((res) => res.json())
     .then((todos) => {
+      console.log("todos", todos);
       callback(todos as ToDo[]);
     });
 }
@@ -25,14 +27,6 @@ export default function App() {
     if (!inputText.trim()) return;
 
     try {
-      const newToDo: ToDo = {
-        id: crypto.randomUUID(),
-        description: inputText,
-      };
-
-      // addOrReplaceTodo(newToDo);
-      // TODO: Schedule the task and update the task with the parsedTask
-
       // let's first convert it to the object that the scheduler expects
       const result = await fetch("/api/string-to-schedule", {
         method: "POST",
@@ -70,7 +64,7 @@ export default function App() {
     }
   };
 
-  const handleToggleToDo = async (todoId: string) => {
+  const handleToggleToDo = async (_todoId: string) => {
     // setTodos((prev) =>
     //   prev.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo))
     // );
@@ -79,7 +73,15 @@ export default function App() {
 
   const handleDeleteToDo = async (todoId: string) => {
     // TODO: Cancel the scheduled task
-    setTodos((prev) => prev.filter((todo) => todo.id !== todoId));
+    const res = await fetch("/parties/to-dos/username/api/remove-todo", {
+      method: "POST",
+      body: JSON.stringify({ id: todoId }),
+    });
+    if (res.ok) {
+      setTodos((prev) => prev.filter((todo) => todo.id !== todoId));
+    } else {
+      console.error(`Failed to remove todo ${todoId}: ${res.statusText}`);
+    }
   };
 
   useEffect(() => {
@@ -124,7 +126,16 @@ export default function App() {
                 <p className={`text-gray-800 ${"a" /* todo.completed ? "line-through" : ""} */}`}>
                   {todo.description}
                 </p>
-                <p className="text-sm text-gray-500">Due: {todo.time}</p>
+                {todo.type !== "no-schedule" && (
+                  <p className="text-sm text-gray-500">
+                    Due: {new Date(todo.time).toLocaleString()}
+                  </p>
+                )}
+                {todo.type === "cron" && (
+                  <p className="text-sm text-gray-500 italic">
+                    (Repeats: {cronstrue.toString(todo.cron)})
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => void handleDeleteToDo(todo.id)}

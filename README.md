@@ -40,6 +40,7 @@ A task has a few parts:
   - **`type: delayed`**: the task will be run after a delay **`delayInSeconds`**
   - **`type: cron`**: the task will be run on a cron schedule **`cron`**
   - **`type: scheduled`**: the task will be run at a specific date **`time`**
+  - **`type: no-schedule`**: the task will never be run (useful for tasks that have to be manually removed)
 - **callback**: which is a function that is called when the task is run. It can be of type `webhook`, ` durable-object` or `service`
   - **`type: webhook`**: the task will be run by POSTing to a **`url`**
   - **`type: durable-object`**: the task will be run by calling a function on a durable object

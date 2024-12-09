@@ -93,8 +93,8 @@ export class Scheduler<Env> extends DurableObject<Env> {
     `
       );
 
-      // Schedule the next task if any exist
-      await this.scheduleNextAlarm();
+      // execute any pending tasks and schedule the next alarm
+      await this.alarm();
     });
   }
 
@@ -129,7 +129,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     if (!result) return;
 
     if (result.length > 0 && "time" in result[0]) {
-      const nextTime = new Date(result[0].time * 1000);
+      const nextTime = result[0].time * 1000;
       await this.ctx.storage.setAlarm(nextTime);
     }
   }
@@ -232,7 +232,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
         type: "cron",
       };
     } else {
-      const time = new Date(Date.now());
+      const time = new Date(8640000000000000);
       const timestamp = Math.floor(time.getTime() / 1000);
       const query = `
         INSERT OR REPLACE INTO tasks (id, description, payload, callback, type, time)
@@ -366,7 +366,11 @@ export class Scheduler<Env> extends DurableObject<Env> {
         //@ts-expect-error  yeah whatever
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         this.env[task.callback.service][task.callback.function](task.payload);
+      } else {
+        console.error("unknown callback type", task);
       }
+    } else {
+      console.error("missing callback", task);
     }
   }
 

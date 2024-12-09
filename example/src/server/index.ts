@@ -81,6 +81,12 @@ export class ToDos extends Server<Env> {
       return new Response(JSON.stringify(task));
     }
 
+    if (url.pathname.endsWith("/api/remove-todo") && request.method === "POST") {
+      const { id } = (await request.json()) satisfies { id: string };
+      const task = await scheduler.cancelTask(id);
+      return new Response(JSON.stringify(task));
+    }
+
     return new Response("Not found", { status: 404 });
   }
 }
