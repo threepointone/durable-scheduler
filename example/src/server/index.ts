@@ -98,6 +98,7 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
     const url = new URL(request.url);
 
+    // reroute vite dev server requests to the client
     if (!url.pathname.startsWith("/api/")) {
       return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
     }
@@ -123,9 +124,6 @@ Here is the string:
 ${await request.text()}
 `,
         });
-
-        // eslint-disable-next-line no-console
-        console.log(result.object);
 
         return new Response(JSON.stringify(result.object));
       }

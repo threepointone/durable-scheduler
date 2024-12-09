@@ -99,6 +99,11 @@ describe("Hello World worker", () => {
       delayInSeconds,
     });
 
+    const timestamp = Math.floor((new Date().getTime() + delayInSeconds * 1000) / 1000);
+
+    // pull out the time from the task
+    const { time: taskTime } = task;
+
     expect(task).toMatchInlineSnapshot(`
       {
         "callback": {
@@ -111,14 +116,17 @@ describe("Hello World worker", () => {
         "payload": {
           "test": "test",
         },
+        "time": ${
+          // @ts-expect-error I'm bad at typescript
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+          taskTime.toISOString()
+        },
         "type": "delayed",
       }
     `);
 
     const debug = await stub.getAllTasks();
     expect(debug.result).toHaveLength(1);
-
-    const timestamp = Math.floor((new Date().getTime() + delayInSeconds * 1000) / 1000);
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -171,6 +179,7 @@ describe("Hello World worker", () => {
         "payload": {
           "test": "test",
         },
+        "time": ${next.toDate().toISOString()},
         "type": "cron",
       }
     `);
@@ -201,6 +210,7 @@ describe("Hello World worker", () => {
   it("can schedule a no-schedule task", async () => {
     const stub = getStub(env);
     const id = "no-schedule-task-001";
+    // const time = new Date(Date.now());
     const task = await stub.scheduleTask({
       id,
       description: "test",
@@ -212,6 +222,9 @@ describe("Hello World worker", () => {
       type: "no-schedule",
     });
 
+    // let's pull out the time from the task
+    const { time } = task;
+
     expect(task).toMatchInlineSnapshot(`
       {
         "callback": {
@@ -222,6 +235,11 @@ describe("Hello World worker", () => {
         "id": "no-schedule-task-001",
         "payload": {
           "test": "test",
+        },
+        "time": ${
+          // @ts-expect-error I'm bad at typescript
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+          time.toISOString()
         },
         "type": "no-schedule",
       }
@@ -244,7 +262,11 @@ describe("Hello World worker", () => {
         "description": "test",
         "id": "no-schedule-task-001",
         "payload": "{"test":"test"}",
-        "time": null,
+        "time": ${Math.floor(
+          // @ts-expect-error I'm bad at typescript
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+          time.getTime() / 1000
+        )},
         "type": "no-schedule",
       }
     `);

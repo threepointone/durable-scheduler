@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import cronParser from "cron-parser";
 
-export type Task = {
+export type RawTask = {
   id: string;
   description?: string | undefined;
   payload?: Record<string, unknown> | undefined;
@@ -24,17 +24,36 @@ export type Task = {
     }
 );
 
+export type Task = RawTask & {
+  time: Date;
+};
+
 export type SqlTask = {
   id: string;
   description: string | null;
   payload: string | null;
   callback: string | null;
-  type: string | null;
-  time: number | null;
-  delayInSeconds: number | null;
-  cron: string | null;
-  created_at: number | null;
-};
+  created_at: number;
+} & (
+  | {
+      type: "scheduled";
+      time: number;
+    }
+  | {
+      type: "delayed";
+      time: number;
+      delayInSeconds: number;
+    }
+  | {
+      type: "cron";
+      time: number;
+      cron: string;
+    }
+  | {
+      type: "no-schedule";
+      time: number;
+    }
+);
 
 type Callback =
   | {
@@ -45,6 +64,11 @@ type Callback =
       type: "durable-object";
       namespace: string;
       id: string;
+      function: string;
+    }
+  | {
+      type: "service";
+      service: string;
       function: string;
     };
 
@@ -105,12 +129,12 @@ export class Scheduler<Env> extends DurableObject<Env> {
     if (!result) return;
 
     if (result.length > 0 && "time" in result[0]) {
-      const nextTime = new Date((result[0].time as number) * 1000);
+      const nextTime = new Date(result[0].time * 1000);
       await this.ctx.storage.setAlarm(nextTime);
     }
   }
 
-  async scheduleTask(task: Task): Promise<Task> {
+  async scheduleTask(task: RawTask): Promise<Task> {
     const { id } = task;
 
     if ("time" in task && task.time) {
@@ -172,6 +196,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
         payload: task.payload,
         callback: task.callback,
         delayInSeconds: task.delayInSeconds,
+        time,
         type: "delayed",
       };
     } else if ("cron" in task && task.cron) {
@@ -203,12 +228,15 @@ export class Scheduler<Env> extends DurableObject<Env> {
         payload: task.payload,
         callback: task.callback,
         cron: task.cron,
+        time: nextExecutionTime,
         type: "cron",
       };
     } else {
+      const time = new Date(Date.now());
+      const timestamp = Math.floor(time.getTime() / 1000);
       const query = `
-        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type)
-        VALUES (?, ?, ?, ?, 'no-schedule')
+        INSERT OR REPLACE INTO tasks (id, description, payload, callback, type, time)
+        VALUES (?, ?, ?, ?, 'no-schedule', ?)
       `;
       this.querySql([
         {
@@ -218,6 +246,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
             task.description || null,
             JSON.stringify(task.payload || null),
             JSON.stringify(task.callback || null),
+            timestamp,
           ],
         },
       ]);
@@ -227,6 +256,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
         description: task.description,
         payload: task.payload,
         callback: task.callback,
+        time,
         type: "no-schedule",
       };
     }
@@ -268,53 +298,74 @@ export class Scheduler<Env> extends DurableObject<Env> {
       description: row.description,
       payload: row.payload ? (JSON.parse(row.payload) as Record<string, unknown>) : undefined,
       callback: row.callback ? (JSON.parse(row.callback) as Callback) : undefined,
-    } as Task;
+    } as RawTask;
 
     switch (row.type) {
       case "scheduled":
         return {
           ...base,
-          time: new Date((row.time as number) * 1000),
+          time: new Date(row.time * 1000),
           type: "scheduled",
         };
       case "delayed":
         return {
           ...base,
-          delayInSeconds: row.delayInSeconds as number,
+          delayInSeconds: row.delayInSeconds,
+          time: new Date(row.time * 1000),
           type: "delayed",
         };
       case "cron":
         return {
           ...base,
-          cron: row.cron as string,
+          cron: row.cron,
+          time: new Date(row.time * 1000),
           type: "cron",
         };
+      case "no-schedule":
+        return {
+          ...base,
+          time: new Date(row.time * 1000),
+          type: "no-schedule",
+        };
       default:
+        // @ts-expect-error expected wrong type
         throw new Error(`Unknown task type: ${row.type as string}`);
     }
   }
 
   private async executeTask(task: Task): Promise<void> {
     // This is where you would implement the actual task execution
-    // eslint-disable-next-line no-console
     console.log(`Executing task ${task.id}:`, task);
     if ("callback" in task && task.callback) {
       const { type } = task.callback;
       if (type === "webhook") {
-        await fetch(task.callback.url, {
+        const response = await fetch(task.callback.url, {
           method: "POST",
           body: JSON.stringify(task.payload),
           headers: {
             "Content-Type": "application/json",
           },
         });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Webhook failed with status ${response.status} and body ${text}`);
+        }
+        // drain body
+        const responseBody = await response.text();
+        console.log(`Webhook response body: ${responseBody}`);
       } else if (type === "durable-object") {
         //@ts-expect-error  yeah whatever
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         const stub = this.env[task.callback.namespace].get(task.callback.id);
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        await stub[task.callback.function](task.payload);
+        stub[task.callback.function](task.payload).catch((e: unknown) => {
+          console.error("Error executing durable object function:", e);
+        });
+      } else if (type === "service") {
+        //@ts-expect-error  yeah whatever
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        this.env[task.callback.service][task.callback.function](task.payload);
       }
     }
   }
@@ -363,7 +414,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     return true;
   }
 
-  querySql<T>(qs: SqliteQuery[], isRaw = false): QueueResult<T> {
+  querySql<T>(qs: SqliteQuery[], isRaw = false): SqlResult<T> {
     try {
       if (!qs.length) {
         throw new Error("No query found to run");
@@ -448,7 +499,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
   }
 }
 
-export type QueueResult<T> =
+export type SqlResult<T> =
   | {
       result: T[];
       error: null;

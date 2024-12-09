@@ -50,6 +50,7 @@ export default [
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/await-thenable": "off",
+      "no-console": "off",
       // React rules
       ...reactPlugin.configs.recommended.rules,
       "react/react-in-jsx-scope": "off",
@@ -64,9 +65,6 @@ export default [
           alphabetize: { order: "asc", caseInsensitive: true },
         },
       ],
-
-      // General rules
-      "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
   {

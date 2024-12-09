@@ -9,80 +9,101 @@ Sophisticated scheduler for durable tasks, built on Durable Object Alarms.
 - query tasks by description or id (or by time range?)
 - cancel tasks
 
-Bonus: This will be particularly useful when wired up with an LLM agent, so you'll be able to schedule tasks by describing them in natural language. Like "remind me to call my friend every monday at 10:00"
+The killer app: This will be particularly useful when wired up with an LLM agent, so you'll be able to schedule tasks by describing them in natural language. Like "remind me to call my friend every monday at 10:00"
 
 ```ts
 import { Scheduler } from "durable-scheduler";
 
-type Task = {
-  id: string;
-  description: string;
-  time: Date;
-} & (
-  | {
-      time: Date;
-      type: "scheduled";
-    }
-  | {
-      delayInSeconds: number;
-      type: "delayed";
-    }
-  | {
-      cron: string;
-      type: "cron";
-    }
-);
+export { Scheduler };
+// also setup wrangler.toml to create a durable object binding
+// let's say you've done it this way:
 
-class MyClass extends Scheduler {
-  foo() {
-    // schedule at specific time
-    this.scheduler.scheduleTask({
-      description: "my-task",
-      time: new Date(Date.now() + 1000),
-    });
+// [[durable_objects.bindings]]
+// name = "SCHEDULER"
+// class_name = "Scheduler"
 
-    // schedule after a certain amount of time
-    this.scheduler.scheduleTask({
-      description: "my-task",
-      delayInSeconds: 1000, // in ms? s?
-    });
-
-    // schedule to run periodically
-    this.scheduler.scheduleTask({
-      description: "my-task",
-      cron: "*/1 * * * *", // every minute
-    });
-
-    // you can also specify an id
-    this.scheduler.scheduleTask({
-      id: "my-task",
-      time: new Date(Date.now() + 1000),
-    });
-
-    // ids must be unique
-
-    // if you don't provide an id, it will default to a random uuid
-    // if you try to schedule a task with an id that already exists,
-    // it will overwrite the existing task
-
-    // query for tasks
-    const tasks = this.scheduler.query({
-      // by description
-      // by id
-      // by time range
-      // some kind of sql syntax here? dunno..
-    });
-
-    // cancel a task
-    tasks.forEach((task) => {
-      this.scheduler.cancelTask(task.id);
-    });
-  }
-}
+export default {
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    // access a scheduler instance
+    const id = env.SCHEDULER.idFromName("my-scheduler");
+    const scheduler = env.SCHEDULER.get(id);
+    // now you can use the scheduler
+  },
+};
 ```
+
+A task has a few parts:
+
+- **description**: which is a string that you can use to identify the task
+- **payload**: which is a JSON object that is passed to the task
+- **type**: which is one of "delayed", "cron", or "scheduled"
+  - **`type: delayed`**: the task will be run after a delay **`delayInSeconds`**
+  - **`type: cron`**: the task will be run on a cron schedule **`cron`**
+  - **`type: scheduled`**: the task will be run at a specific date **`time`**
+- **callback**: which is a function that is called when the task is run. It can be of type `webhook`, ` durable-object` or `service`
+  - **`type: webhook`**: the task will be run by POSTing to a **`url`**
+  - **`type: durable-object`**: the task will be run by calling a function on a durable object
+  - **`type: service`**: the task will be run by calling a function on a service
+
+Here are some examples:
+
+- This will schedule a task to be run after a delay of 60 seconds, and call a webhook at `https://example.com/webhook` with the payload `{ message: "Hello, world!" }`
+
+  ```ts
+  scheduler.scheduleTask({
+    description: "my-task",
+    type: "delayed",
+    delayInSeconds: 60,
+    payload: {
+      message: "Hello, world!",
+    },
+    callback: {
+      type: "webhook",
+      url: "https://example.com/webhook",
+    },
+  });
+  ```
+
+- This will schedule a task to be run every Friday at 6pm, and call a durable object binding `MYDURABLE` of id "some-id" with the function `myFunction` with the payload `{ message: "Hello, world!" }`
+
+  ```ts
+  scheduler.scheduleTask({
+    description: "my-task",
+    type: "cron",
+    cron: "0 18 * * 5",
+    payload: {
+      message: "Hello, world!",
+    },
+    callback: {
+      type: "durable-object",
+      namespace: "MYDURABLE",
+      id: "some-id",
+      function: "myFunction",
+    },
+  });
+  ```
+
+- This will schedule a task to be run at a specific date and time, and call a service binding `MYSERVICE` with the function `myFunction` with the payload `{ message: "Hello, world!" }`
+
+  ```ts
+  scheduler.scheduleTask({
+    description: "my-task",
+    type: "scheduled",
+    time: new Date("2024-01-01T12:00:00Z"),
+    payload: {
+      message: "Hello, world!",
+    },
+    callback: {
+      type: "service",
+      service: "MYSERVICE",
+      function: "myFunction",
+    },
+  });
+  ```
 
 ## todo:
 
-- replace with a decorator syntax
 - add a dashboard for visualizing tasks and their status?
-- what's a good api for actually running the tasks? (maybe just a simple http api? like a webhook?)
+- how to handle errors?
+- how to handle retries?
+- testing story?

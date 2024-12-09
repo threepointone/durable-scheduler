@@ -1,16 +1,15 @@
 import { useState } from "react";
 
-import { SqlTask } from "../../../src";
+import { Task } from "../../../src";
 
 interface ToDo {
   id: string;
   inputText: string;
-  parsedTask: SqlTask | undefined;
+  task: Task | undefined;
   completed: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const ROOM_ID = "username"; // TODO: this will read a username from auth later
+// const ROOM_ID = "username"; // TODO: this will read a username from auth later
 
 export default function App() {
   const [todos, setTodos] = useState<ToDo[]>([]);
@@ -24,7 +23,7 @@ export default function App() {
       const newToDo: ToDo = {
         id: crypto.randomUUID(),
         inputText,
-        parsedTask: undefined,
+        task: undefined,
         completed: false,
       };
 
@@ -37,7 +36,6 @@ export default function App() {
         body: inputText,
       });
       const parsedTask = await result.json();
-      // eslint-disable-next-line no-console
       console.log("parsedTask", parsedTask);
       // ok now let's schedule it
 
@@ -94,9 +92,9 @@ export default function App() {
               />
               <div className="flex-1">
                 <p className={`text-gray-800 ${todo.completed ? "line-through" : ""}`}>
-                  {todo.parsedTask?.description}
+                  {todo.task?.description}
                 </p>
-                <p className="text-sm text-gray-500">Due: {todo.parsedTask?.time}</p>
+                <p className="text-sm text-gray-500">Due: {todo.task?.time.toISOString()}</p>
               </div>
               <button
                 onClick={() => void handleDeleteToDo(todo.id)}
