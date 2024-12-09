@@ -30,24 +30,33 @@ describe("Hello World worker", () => {
     const stub = getStub(env);
     const id = "scheduled-task-001";
     const time = new Date(Date.now() + 10000);
-    // eslint-disable-next-line @typescript-eslint/await-thenable
     const task = await stub.scheduleTask({
       id,
-      name: "test",
+      description: "test",
+      payload: { test: "test" },
+      callback: {
+        type: "webhook",
+        url: "https://example.com",
+      },
       type: "scheduled",
-      payload: {},
       time,
     });
 
     expect(task).toMatchInlineSnapshot(`
-        {
-          "id": "scheduled-task-001",
-          "name": "test",
-          "payload": {},
-          "time": ${time.toISOString()},
-          "type": "scheduled",
-        }
-      `);
+      {
+        "callback": {
+          "type": "webhook",
+          "url": "https://example.com",
+        },
+        "description": "test",
+        "id": "scheduled-task-001",
+        "payload": {
+          "test": "test",
+        },
+        "time": ${time.toISOString()},
+        "type": "scheduled",
+      }
+    `);
     const timestamp = Math.floor(time.getTime() / 1000);
 
     const debug = await stub.getAllTasks();
@@ -61,11 +70,12 @@ describe("Hello World worker", () => {
 
     expect(rest).toMatchInlineSnapshot(`
       {
+        "callback": "{"type":"webhook","url":"https://example.com"}",
         "cron": null,
-        "delay": null,
+        "delayInSeconds": null,
+        "description": "test",
         "id": "scheduled-task-001",
-        "name": "test",
-        "payload": "{}",
+        "payload": "{"test":"test"}",
         "time": ${timestamp},
         "type": "scheduled",
       }
@@ -75,29 +85,40 @@ describe("Hello World worker", () => {
   it("can schedule a delayed task", async () => {
     const stub = getStub(env);
     const id = "delayed-task-001";
-    const delay = 10000;
-    const timestamp = new Date().getTime() + delay;
-    // eslint-disable-next-line @typescript-eslint/await-thenable
+    const delayInSeconds = 10000;
+
     const task = await stub.scheduleTask({
       id,
-      name: "test",
+      description: "test",
+      payload: { test: "test" },
+      callback: {
+        type: "webhook",
+        url: "https://example.com",
+      },
       type: "delayed",
-      payload: {},
-      delay,
+      delayInSeconds,
     });
 
     expect(task).toMatchInlineSnapshot(`
-    {
-      "delay": 10000,
-      "id": "delayed-task-001",
-      "name": "test",
-      "payload": {},
-      "type": "delayed",
-    }
-  `);
+      {
+        "callback": {
+          "type": "webhook",
+          "url": "https://example.com",
+        },
+        "delayInSeconds": 10000,
+        "description": "test",
+        "id": "delayed-task-001",
+        "payload": {
+          "test": "test",
+        },
+        "type": "delayed",
+      }
+    `);
 
     const debug = await stub.getAllTasks();
     expect(debug.result).toHaveLength(1);
+
+    const timestamp = Math.floor((new Date().getTime() + delayInSeconds * 1000) / 1000);
 
     const {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -107,12 +128,13 @@ describe("Hello World worker", () => {
 
     expect(rest).toMatchInlineSnapshot(`
       {
+        "callback": "{"type":"webhook","url":"https://example.com"}",
         "cron": null,
-        "delay": 10000,
+        "delayInSeconds": 10000,
+        "description": "test",
         "id": "delayed-task-001",
-        "name": "test",
-        "payload": "{}",
-        "time": ${Math.floor(timestamp / 1000)},
+        "payload": "{"test":"test"}",
+        "time": ${timestamp},
         "type": "delayed",
       }
     `);
@@ -125,21 +147,30 @@ describe("Hello World worker", () => {
     const next = cronParser.parseExpression(cron).next();
     const timestamp = Math.floor(next.toDate().getTime() / 1000);
 
-    // eslint-disable-next-line @typescript-eslint/await-thenable
     const task = await stub.scheduleTask({
       id,
-      name: "test",
+      description: "test",
+      payload: { test: "test" },
+      callback: {
+        type: "webhook",
+        url: "https://example.com",
+      },
       type: "cron",
-      payload: {},
       cron,
     });
 
     expect(task).toMatchInlineSnapshot(`
       {
+        "callback": {
+          "type": "webhook",
+          "url": "https://example.com",
+        },
         "cron": "0 0 * * 2",
+        "description": "test",
         "id": "cron-task-001",
-        "name": "test",
-        "payload": {},
+        "payload": {
+          "test": "test",
+        },
         "type": "cron",
       }
     `);
@@ -154,15 +185,68 @@ describe("Hello World worker", () => {
     } = (debug.result || [])[0];
 
     expect(rest).toMatchInlineSnapshot(`
-    {
-      "cron": "0 0 * * 2",
-      "delay": null,
-      "id": "cron-task-001",
-      "name": "test",
-      "payload": "{}",
-      "time": ${timestamp},
-      "type": "cron",
-    }
-  `);
+      {
+        "callback": "{"type":"webhook","url":"https://example.com"}",
+        "cron": "0 0 * * 2",
+        "delayInSeconds": null,
+        "description": "test",
+        "id": "cron-task-001",
+        "payload": "{"test":"test"}",
+        "time": ${timestamp},
+        "type": "cron",
+      }
+    `);
+  });
+
+  it("can schedule a no-schedule task", async () => {
+    const stub = getStub(env);
+    const id = "no-schedule-task-001";
+    const task = await stub.scheduleTask({
+      id,
+      description: "test",
+      payload: { test: "test" },
+      callback: {
+        type: "webhook",
+        url: "https://example.com",
+      },
+      type: "no-schedule",
+    });
+
+    expect(task).toMatchInlineSnapshot(`
+      {
+        "callback": {
+          "type": "webhook",
+          "url": "https://example.com",
+        },
+        "description": "test",
+        "id": "no-schedule-task-001",
+        "payload": {
+          "test": "test",
+        },
+        "type": "no-schedule",
+      }
+    `);
+
+    const debug = await stub.getAllTasks();
+    expect(debug.result).toHaveLength(1);
+
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      created_at,
+      ...rest
+    } = (debug.result || [])[0];
+
+    expect(rest).toMatchInlineSnapshot(`
+      {
+        "callback": "{"type":"webhook","url":"https://example.com"}",
+        "cron": null,
+        "delayInSeconds": null,
+        "description": "test",
+        "id": "no-schedule-task-001",
+        "payload": "{"test":"test"}",
+        "time": null,
+        "type": "no-schedule",
+      }
+    `);
   });
 });

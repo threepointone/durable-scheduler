@@ -6,7 +6,7 @@ Sophisticated scheduler for durable tasks, built on Durable Object Alarms.
 
 - schedule tasks by time, delay, or cron expression
 - schedule multiple tasks on the same object
-- query tasks by name, id, or payload pattern
+- query tasks by description or id (or by time range?)
 - cancel tasks
 
 Bonus: This will be particularly useful when wired up with an LLM agent, so you'll be able to schedule tasks by describing them in natural language. Like "remind me to call my friend every monday at 10:00"
@@ -16,8 +16,7 @@ import { Scheduler } from "durable-scheduler";
 
 type Task = {
   id: string;
-  name: string;
-  payload: any;
+  description: string;
   time: Date;
 } & (
   | {
@@ -25,7 +24,7 @@ type Task = {
       type: "scheduled";
     }
   | {
-      delay: number;
+      delayInSeconds: number;
       type: "delayed";
     }
   | {
@@ -38,52 +37,38 @@ class MyClass extends Scheduler {
   foo() {
     // schedule at specific time
     this.scheduler.scheduleTask({
-      name: "my-task",
+      description: "my-task",
       time: new Date(Date.now() + 1000),
-      payload: {
-        // ...
-      },
     });
 
     // schedule after a certain amount of time
     this.scheduler.scheduleTask({
-      name: "my-task",
-      delay: 1000, // in ms? s?
-      payload: {
-        // ...
-      },
+      description: "my-task",
+      delayInSeconds: 1000, // in ms? s?
     });
 
     // schedule to run periodically
     this.scheduler.scheduleTask({
-      name: "my-task",
+      description: "my-task",
       cron: "*/1 * * * *", // every minute
-      payload: {
-        // ...
-      },
     });
 
-    // you can also use an id instead of a name
+    // you can also specify an id
     this.scheduler.scheduleTask({
       id: "my-task",
       time: new Date(Date.now() + 1000),
-      payload: {
-        // ...
-      },
     });
 
     // ids must be unique
-    // names can be repeated
 
-    // if you don't provide a name or id, it will default to a random uuid
+    // if you don't provide an id, it will default to a random uuid
     // if you try to schedule a task with an id that already exists,
     // it will overwrite the existing task
 
     // query for tasks
     const tasks = this.scheduler.query({
-      // by name
+      // by description
       // by id
-      // by payload pattern matching (?)
       // by time range
       // some kind of sql syntax here? dunno..
     });

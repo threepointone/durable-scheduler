@@ -8,11 +8,16 @@ assets = { directory = "public" }
 
 [[durable_objects.bindings]]
 name = "SCHEDULER"
-class_name = "MyScheduler"
+class_name = "Scheduler"
+
+[[durable_objects.bindings]]
+name = "TODOS"
+class_name = "ToDos"
+
 
  [[migrations]]
 tag = "v1"
-new_sqlite_classes = [ "MyScheduler" ]
+new_sqlite_classes = [ "Scheduler", "ToDos" ]
 
 [ai]
 binding = "AI"

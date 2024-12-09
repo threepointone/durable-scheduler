@@ -1,17 +1,42 @@
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateObject } from "ai";
+import { Server, routePartykitRequest } from "partyserver";
 import { z } from "zod";
 
 import { Scheduler } from "../../../src";
 
+export { Scheduler };
+
 type Env = {
+  OPENAI_API_KEY: string;
   AI: Ai;
-  SCHEDULER: DurableObjectNamespace<MyScheduler>;
+  Scheduler: DurableObjectNamespace<Scheduler<Env>>;
+  ToDos: DurableObjectNamespace<ToDos>;
 };
 
 const taskSchema = z
   .object({
-    id: z.string().default(() => crypto.randomUUID()),
-    name: z.string().optional(),
-    payload: z.record(z.any()).default({}),
+    id: z.string().default(() => {
+      return crypto.randomUUID();
+    }),
+    description: z.string().optional(),
+    // // we haven't implemented this yet
+    // payload: z.record(z.any()).optional(),
+    // // this isn't necessary, but it's here for reference
+    // callback: z
+    //   .union([
+    //     z.object({
+    //       type: z.literal("webhook"),
+    //       url: z.string(),
+    //     }),
+    //     z.object({
+    //       type: z.literal("durable-object"),
+    //       namespace: z.string(),
+    //       id: z.string(),
+    //       function: z.string(),
+    //     }),
+    //   ])
+    //   .optional(),
   })
   .and(
     z.discriminatedUnion("type", [
@@ -21,11 +46,14 @@ const taskSchema = z
       }),
       z.object({
         type: z.literal("delayed"),
-        delay: z.number(),
+        delayInSeconds: z.number(),
       }),
       z.object({
         type: z.literal("cron"),
         cron: z.string(),
+      }),
+      z.object({
+        type: z.literal("no-schedule"),
       }),
     ])
   );
@@ -34,13 +62,14 @@ const taskSchema = z
 //   if (!condition) throw new Error(message);
 // }
 
-export class MyScheduler extends Scheduler<Env> {
+export class ToDos extends Server<Env> {
+  scheduler: DurableObjectStub<Scheduler<Env>>;
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env);
+    this.scheduler = env.Scheduler.get(state.id);
+  }
   async fetch(request: Request) {
     const url = new URL(request.url);
-
-    if (!url.pathname.startsWith("/api/")) {
-      return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
-    }
 
     const route = `${request.method} ${url.pathname}`;
 
@@ -48,53 +77,14 @@ export class MyScheduler extends Scheduler<Env> {
       case "GET /api/":
         return new Response("Hello, world!");
 
-      case "GET /api/string-to-schedule": {
-        const result = await this.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
-          prompt: `
-            You are a helpful assistant. Today is ${new Date().toUTCString()}.
-            You are given a string that has to be input as an object into a scheduler.
-            The string may be: 
-            - a delay like "in 10 minutes"
-              - you need to convert this into an object with a delay property like 
-              { 
-                "type": "delayed",
-                "delay": 600000 
-              }
-            - a specific time like "next monday at 10:00"
-              - you need to convert this into an object with a time property with a UTC timestamp like 
-              { 
-                "type": "scheduled",
-                "time": "Mon, 02 Dec 2024 10:00:00 GMT"
-              }
-            - a cron expression like "every 10 minutes"
-              - you need to convert this into an object with a cron property like 
-              { 
-                "type": "cron",
-                "cron": "*/10 * * * *"
-              }
-            
-            Here is the input string:
-            ${url.searchParams.get("input")}
-
-            Do not include any other text than the json object.
-            `,
-        });
-
-        // @ts-expect-error - this is a string
-        // eslint-disable-next-line no-console
-        console.log(result.response);
-        // @ts-expect-error - this is a string
-        return new Response(result.response as string);
-      }
-
       case "GET /api/tasks": {
-        const tasks = await this.query();
+        const tasks = await this.scheduler.query();
         return new Response(JSON.stringify(tasks));
       }
 
       case "POST /api/tasks": {
         const task = taskSchema.parse(await request.json());
-        await this.scheduleTask(task);
+        await this.scheduler.scheduleTask(task);
         return new Response(JSON.stringify(task));
       }
 
@@ -112,8 +102,35 @@ export default {
       return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
     }
 
-    const id = env.SCHEDULER.idFromName("example");
-    const stub = env.SCHEDULER.get(id);
-    return stub.fetch(request);
+    switch (`${request.method} ${url.pathname}`) {
+      case "POST /api/string-to-schedule": {
+        const openai = createOpenAI({
+          apiKey: env.OPENAI_API_KEY,
+        });
+
+        const result = await generateObject({
+          model: openai("gpt-4o"),
+          mode: "json",
+          schemaName: "task",
+          schemaDescription: "A task to be scheduled",
+          schema: taskSchema,
+          maxRetries: 5,
+          prompt: `
+Today is ${new Date().toUTCString()}.
+You are given a string that has to be input as an object into a scheduler.
+
+Here is the string:
+${await request.text()}
+`,
+        });
+
+        // eslint-disable-next-line no-console
+        console.log(result.object);
+
+        return new Response(JSON.stringify(result.object));
+      }
+    }
+
+    return (await routePartykitRequest(request, env)) || new Response("Not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
