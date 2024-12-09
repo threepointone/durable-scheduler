@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { Task } from "../../../src";
-
-interface ToDo {
-  id: string;
-  inputText: string;
-  task: Task | undefined;
-  completed: boolean;
-}
+import { type Task as ToDo } from "../../../src";
 
 function fetchTodos(callback: (todos: ToDo[]) => void) {
   return fetch("/parties/to-dos/username/api/get-todos")
@@ -34,12 +27,10 @@ export default function App() {
     try {
       const newToDo: ToDo = {
         id: crypto.randomUUID(),
-        inputText,
-        task: undefined,
-        completed: false,
+        description: inputText,
       };
 
-      addOrReplaceTodo(newToDo);
+      // addOrReplaceTodo(newToDo);
       // TODO: Schedule the task and update the task with the parsedTask
 
       // let's first convert it to the object that the scheduler expects
@@ -51,6 +42,26 @@ export default function App() {
       console.log("parsedTask", parsedTask);
       // ok now let's schedule it
 
+      const res = await fetch("/parties/to-dos/username/api/add-todo", {
+        method: "POST",
+        body: JSON.stringify(parsedTask),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const newToDoResponse = await res.json();
+      console.log("newToDoResponse", newToDoResponse);
+      addOrReplaceTodo(newToDoResponse as ToDo);
+
+      fetchTodos((todos) => {
+        for (const todo of todos) {
+          console.log("todo", todo);
+          addOrReplaceTodo(todo);
+        }
+      }).catch((error) => {
+        console.error("Failed to fetch todos:", error);
+      });
+
       // TODO: schedule the task
       setInputText("");
     } catch (error) {
@@ -60,9 +71,10 @@ export default function App() {
   };
 
   const handleToggleToDo = async (todoId: string) => {
-    setTodos((prev) =>
-      prev.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo))
-    );
+    // setTodos((prev) =>
+    //   prev.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo))
+    // );
+    alert("toggle todo");
   };
 
   const handleDeleteToDo = async (todoId: string) => {
@@ -104,15 +116,15 @@ export default function App() {
             <div key={todo.id} className="bg-white rounded-lg shadow p-4 flex items-center gap-4">
               <input
                 type="checkbox"
-                checked={todo.completed}
+                // checked={todo.completed}
                 onChange={() => void handleToggleToDo(todo.id)}
                 className="h-5 w-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
               />
               <div className="flex-1">
-                <p className={`text-gray-800 ${todo.completed ? "line-through" : ""}`}>
-                  {todo.task?.description}
+                <p className={`text-gray-800 ${"a" /* todo.completed ? "line-through" : ""} */}`}>
+                  {todo.description}
                 </p>
-                <p className="text-sm text-gray-500">Due: {todo.task?.time.toISOString()}</p>
+                <p className="text-sm text-gray-500">Due: {todo.time}</p>
               </div>
               <button
                 onClick={() => void handleDeleteToDo(todo.id)}
