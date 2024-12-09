@@ -28,7 +28,7 @@ export default function App() {
 
     try {
       // let's first convert it to the object that the scheduler expects
-      const result = await fetch("/api/string-to-schedule", {
+      const result = await fetch("/parties/to-dos/username/api/string-to-schedule", {
         method: "POST",
         body: inputText,
       });

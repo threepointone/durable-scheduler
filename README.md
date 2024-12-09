@@ -43,8 +43,8 @@ A task has a few parts:
   - **`type: no-schedule`**: the task will never be run (useful for tasks that have to be manually removed)
 - **callback**: which is a function that is called when the task is run. It can be of type `webhook`, ` durable-object` or `service`
   - **`type: webhook`**: the task will be run by POSTing to a **`url`**
-  - **`type: durable-object`**: the task will be run by calling a function on a durable object
-  - **`type: service`**: the task will be run by calling a function on a service
+  - **`type: durable-object`**: the task will be run by calling a function on a durable object **`namespace`** named **`name`** with the function **`function`**
+  - **`type: service`**: the task will be run by calling a function on a service **`service`** with the function **`function`**
 
 Here are some examples:
 
@@ -65,7 +65,7 @@ Here are some examples:
   });
   ```
 
-- This will schedule a task to be run every Friday at 6pm, and call a durable object binding `MYDURABLE` of id "some-id" with the function `myFunction` with the payload `{ message: "Hello, world!" }`
+- This will schedule a task to be run every Friday at 6pm, and call a durable object binding `MYDURABLE` of name "some-id" with the function `myFunction` with the payload `{ message: "Hello, world!" }`
 
   ```ts
   scheduler.scheduleTask({
@@ -78,7 +78,7 @@ Here are some examples:
     callback: {
       type: "durable-object",
       namespace: "MYDURABLE",
-      id: "some-id",
+      name: "some-id",
       function: "myFunction",
     },
   });

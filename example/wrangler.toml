@@ -14,10 +14,12 @@ class_name = "Scheduler"
 name = "ToDos"
 class_name = "ToDos"
 
-
- [[migrations]]
+[[migrations]]
 tag = "v1"
 new_sqlite_classes = [ "Scheduler", "ToDos" ]
+
+[[send_email]]
+name = "SendEmail"
 
 [ai]
 binding = "AI"

@@ -63,7 +63,7 @@ type Callback =
   | {
       type: "durable-object";
       namespace: string;
-      id: string;
+      name: string;
       function: string;
     }
   | {
@@ -120,6 +120,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     const query = `
       SELECT time FROM tasks 
       WHERE time > ? 
+      AND type != 'no-schedule'
       ORDER BY time ASC 
       LIMIT 1
     `;
@@ -136,6 +137,8 @@ export class Scheduler<Env> extends DurableObject<Env> {
 
   async scheduleTask(task: RawTask): Promise<Task> {
     const { id } = task;
+
+    console.log("scheduling task", task);
 
     if ("time" in task && task.time) {
       const timestamp = Math.floor(task.time.getTime() / 1000);
@@ -356,7 +359,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
       } else if (type === "durable-object") {
         //@ts-expect-error  yeah whatever
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const stub = this.env[task.callback.namespace].get(task.callback.id);
+        const stub = this.env[task.callback.namespace].get(task.callback.name);
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         stub[task.callback.function](task.payload).catch((e: unknown) => {
@@ -383,6 +386,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
     criteria: {
       description?: string;
       id?: string;
+      type?: "scheduled" | "delayed" | "cron" | "no-schedule";
       timeRange?: { start?: Date; end?: Date };
     } = {}
   ): Promise<Task[]> {
@@ -397,6 +401,11 @@ export class Scheduler<Env> extends DurableObject<Env> {
     if (criteria.description) {
       query += " AND description = ?";
       params.push(criteria.description);
+    }
+
+    if (criteria.type) {
+      query += " AND type = ?";
+      params.push(criteria.type);
     }
 
     if (criteria.timeRange) {
