@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Task } from "../../../src";
 
@@ -9,11 +9,23 @@ interface ToDo {
   completed: boolean;
 }
 
+function fetchTodos(callback: (todos: ToDo[]) => void) {
+  return fetch("/parties/to-dos/username/api/get-todos")
+    .then((res) => res.json())
+    .then((todos) => {
+      callback(todos as ToDo[]);
+    });
+}
+
 // const ROOM_ID = "username"; // TODO: this will read a username from auth later
 
 export default function App() {
   const [todos, setTodos] = useState<ToDo[]>([]);
   const [inputText, setInputText] = useState("");
+
+  function addOrReplaceTodo(todo: ToDo) {
+    setTodos((prev) => [...prev.filter((t) => t.id !== todo.id), todo]);
+  }
 
   const handleAddToDo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +39,7 @@ export default function App() {
         completed: false,
       };
 
-      setTodos((prev) => [...prev, newToDo]);
+      addOrReplaceTodo(newToDo);
       // TODO: Schedule the task and update the task with the parsedTask
 
       // let's first convert it to the object that the scheduler expects
@@ -57,6 +69,12 @@ export default function App() {
     // TODO: Cancel the scheduled task
     setTodos((prev) => prev.filter((todo) => todo.id !== todoId));
   };
+
+  useEffect(() => {
+    fetchTodos((todos) => setTodos(todos)).catch((error) => {
+      console.error("Failed to fetch todos:", error);
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100 py-8">

@@ -3,7 +3,7 @@ import { generateObject } from "ai";
 import { Server, routePartykitRequest } from "partyserver";
 import { z } from "zod";
 
-import { Scheduler } from "../../../src";
+import { Scheduler, type RawTask } from "../../../src";
 
 export { Scheduler };
 
@@ -63,34 +63,25 @@ const taskSchema = z
 // }
 
 export class ToDos extends Server<Env> {
-  scheduler: DurableObjectStub<Scheduler<Env>>;
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env);
-    this.scheduler = env.Scheduler.get(state.id);
-  }
-  async fetch(request: Request) {
+  async onRequest(request: Request) {
+    const name = this.name;
+    const schedulerId = this.env.Scheduler.idFromName(name);
+    const scheduler = this.env.Scheduler.get(schedulerId);
+
     const url = new URL(request.url);
 
-    const route = `${request.method} ${url.pathname}`;
-
-    switch (route) {
-      case "GET /api/":
-        return new Response("Hello, world!");
-
-      case "GET /api/tasks": {
-        const tasks = await this.scheduler.query();
-        return new Response(JSON.stringify(tasks));
-      }
-
-      case "POST /api/tasks": {
-        const task = taskSchema.parse(await request.json());
-        await this.scheduler.scheduleTask(task);
-        return new Response(JSON.stringify(task));
-      }
-
-      default:
-        return new Response("Not found", { status: 404 });
+    if (url.pathname.endsWith("/api/get-todos") && request.method === "GET") {
+      const todos = await scheduler.query();
+      return new Response(JSON.stringify(todos));
     }
+
+    if (url.pathname.endsWith("/api/add-todo") && request.method === "POST") {
+      const todo = taskSchema.parse(await request.json()) satisfies RawTask;
+      const task = await scheduler.scheduleTask(todo);
+      return new Response(JSON.stringify(task));
+    }
+
+    return new Response("Not found", { status: 404 });
   }
 }
 
@@ -99,11 +90,12 @@ export default {
     const url = new URL(request.url);
 
     // reroute vite dev server requests to the client
-    if (!url.pathname.startsWith("/api/")) {
+    if (!url.pathname.startsWith("/api/") && !url.pathname.startsWith("/parties/")) {
       return fetch(request.url.replace("http://localhost:8787", "http://localhost:5173"), request);
     }
 
     switch (`${request.method} ${url.pathname}`) {
+      // TODO: move this into the durable object
       case "POST /api/string-to-schedule": {
         const openai = createOpenAI({
           apiKey: env.OPENAI_API_KEY,

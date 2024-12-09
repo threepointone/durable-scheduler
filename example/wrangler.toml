@@ -7,11 +7,11 @@ assets = { directory = "public" }
 
 
 [[durable_objects.bindings]]
-name = "SCHEDULER"
+name = "Scheduler"
 class_name = "Scheduler"
 
 [[durable_objects.bindings]]
-name = "TODOS"
+name = "ToDos"
 class_name = "ToDos"
 
 
