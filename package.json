@@ -18,6 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "files": [
+    "LICENSE",
     "dist",
     "README.md"
   ],
