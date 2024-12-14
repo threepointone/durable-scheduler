@@ -1,6 +1,6 @@
 {
   "name": "durable-scheduler",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "./dist/commonjs/index.js",
   "repository": {
     "type": "git",
