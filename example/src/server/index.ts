@@ -1,9 +1,12 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { CoreMessage, generateObject, generateText, tool } from "ai";
+// import { EmailMessage } from "cloudflare:email";
+import * as mathjs from "mathjs";
+import { createMimeMessage } from "mimetext";
 import { Server, routePartykitRequest } from "partyserver";
 import { z } from "zod";
 
-import { Scheduler, type RawTask } from "../../../src";
+import { Scheduler, Task, type RawTask } from "../../../src";
 
 export { Scheduler };
 
@@ -12,6 +15,7 @@ type Env = {
   AI: Ai;
   Scheduler: DurableObjectNamespace<Scheduler<Env>>;
   ToDos: DurableObjectNamespace<ToDos>;
+  SendEmail: SendEmail;
 };
 
 const taskSchema = z
@@ -77,6 +81,115 @@ export class ToDos extends Server<Env> {
     //     created_at INTEGER DEFAULT (unixepoch())
     //   )`
     // );
+
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        todo_id TEXT,
+        messages TEXT,        
+        created_at INTEGER DEFAULT (unixepoch())
+      )
+    `);
+  }
+
+  async runTask(task: Task, previousMessages: CoreMessage[] = []) {
+    const result = await generateText({
+      model: this.openai("gpt-4o-2024-08-06", { structuredOutputs: true }),
+      // toolChoice: "required",
+      messages: previousMessages,
+      tools: {
+        calculate: tool({
+          description:
+            "A tool for evaluating mathematical expressions. " +
+            "Example expressions: " +
+            "'1.2 * (2 + 4.5)', '12.7 cm to inch', 'sin(45 deg) ^ 2'.",
+          parameters: z.object({ expression: z.string() }),
+          execute: async ({ expression }) => {
+            console.log("evaluating", expression);
+            return mathjs.evaluate(expression) as number;
+          },
+        }),
+
+        generate_random_number: tool({
+          description: "A tool for generating a random number.",
+          parameters: z.object({ min: z.number(), max: z.number() }),
+          execute: async ({ min, max }) => {
+            const number = Math.floor(Math.random() * (max - min + 1)) + min;
+            console.log("generating random number", number);
+            return number;
+          },
+        }),
+
+        send_email: tool({
+          description: "A tool for sending an email.",
+          parameters: z.object({ to: z.string(), subject: z.string(), body: z.string() }),
+          execute: async ({ to, subject, body }) => {
+            console.log("sending email", to, subject, body);
+
+            // const msg = createMimeMessage();
+            // msg.setSender({ name: "GPT-4", addr: "spai@cloudflare.com" });
+            // msg.setRecipient(to);
+            // msg.setSubject(subject);
+            // msg.addMessage({
+            //   contentType: "text/plain",
+            //   data: body,
+            // });
+
+            return "Email sent";
+          },
+        }),
+        // answer tool: the LLM will provide a structured answer
+
+        // ask_user: tool({
+        //   description: "A tool for asking the user a question and getting a response.",
+        //   parameters: z.object({ question: z.string() }),
+        //   // execute: async ({ question }) => {
+        //   //   return question;
+        //   // },
+        // }),
+
+        answer: tool({
+          description: "A tool for providing the final answer.",
+          parameters: z.object({
+            steps: z.array(
+              z.object({
+                calculation: z.string(),
+                reasoning: z.string(),
+              })
+            ),
+            answer: z.string(),
+          }),
+          // no execute function - invoking it will terminate the agent
+        }),
+      },
+      // maxRetries: 3,
+      maxSteps: 10,
+      // onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
+      //   // your own logic, e.g. for saving the chat history or recording usage
+      //   console.log("step finished");
+      //   // console.log(text);
+      //   // console.log(toolCalls);
+      //   // console.log(toolResults);
+      //   // console.log(finishReason);
+      //   // console.log(usage);
+      // },
+      system: `
+        You are a helpful assistant. You are given a task to complete. You can ignore anything time related (like dates, times, etc.) Just do the task. If you cannot do the task, apologize and say you cannot do the task. The task is: ${task.description}
+        `,
+
+      // prompt: `Ask the user for 2 random numbers between 1 and 100. Add them together and return the result.`,
+    });
+
+    const messages = result.response.messages;
+    console.dir(messages, { depth: null });
+    this.ctx.storage.sql.exec(
+      `INSERT INTO messages (todo_id, messages) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET messages = ?`,
+      task.id,
+      JSON.stringify(messages),
+      JSON.stringify(messages)
+    );
+    this.broadcast("refresh");
+    return messages;
   }
 
   async onRequest(request: Request) {
@@ -91,6 +204,24 @@ export class ToDos extends Server<Env> {
         const todos = await scheduler.query();
         return new Response(JSON.stringify(todos));
       }
+
+      case "GET /api/get-messages": {
+        const messages = this.ctx.storage.sql.exec(`SELECT * FROM messages`).raw().toArray() as [
+          string, // id
+          string, // todo_id
+          string, // messages
+        ][];
+        return new Response(
+          JSON.stringify(
+            messages.map(([id, todo_id, messages]) => ({
+              id,
+              todo_id,
+              messages: JSON.parse(messages),
+            }))
+          )
+        );
+      }
+
       case "POST /api/add-todo": {
         const todo = taskSchema.parse(await request.json()) satisfies RawTask;
         const task = await scheduler.scheduleTask({
@@ -100,7 +231,7 @@ export class ToDos extends Server<Env> {
             type: "durable-object",
             namespace: "ToDos",
             name: this.name,
-            function: "callback",
+            function: "runTask",
           },
         });
 
@@ -109,7 +240,20 @@ export class ToDos extends Server<Env> {
       case "POST /api/remove-todo": {
         const { id } = (await request.json()) satisfies { id: string };
         const task = await scheduler.cancelTask(id);
+        this.ctx.storage.sql.exec(`DELETE FROM messages WHERE todo_id = ?`, id);
         return new Response(JSON.stringify(task));
+      }
+
+      case "POST /api/do-todo": {
+        const { id, messages = [] } = (await request.json()) satisfies {
+          id: string;
+          messages: CoreMessage[];
+        };
+        console.log({ id, messages });
+        const task = (await scheduler.query({ id }))[0] as Task;
+        console.log("task", task);
+        const result = await this.runTask(task, messages);
+        return new Response(JSON.stringify(result));
       }
 
       case "POST /api/string-to-schedule": {
@@ -149,4 +293,7 @@ export default {
 
     return (await routePartykitRequest(request, env)) || new Response("Not found", { status: 404 });
   },
+  // async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext) {
+  //   // get
+  // },
 } satisfies ExportedHandler<Env>;

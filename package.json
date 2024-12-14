@@ -60,6 +60,8 @@
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.1.0",
+    "mathjs": "^14.0.1",
+    "mimetext": "^3.0.24",
     "partyserver": "^0.0.57",
     "partysocket": "^1.0.2",
     "prettier": "^3.4.2",

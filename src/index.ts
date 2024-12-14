@@ -344,7 +344,7 @@ export class Scheduler<Env> extends DurableObject<Env> {
       if (type === "webhook") {
         const response = await fetch(task.callback.url, {
           method: "POST",
-          body: JSON.stringify(task.payload),
+          body: JSON.stringify(task),
           headers: {
             "Content-Type": "application/json",
           },
@@ -357,18 +357,21 @@ export class Scheduler<Env> extends DurableObject<Env> {
         const responseBody = await response.text();
         console.log(`Webhook response body: ${responseBody}`);
       } else if (type === "durable-object") {
-        //@ts-expect-error  yeah whatever
+        //@ts-expect-error yeah whatever
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const stub = this.env[task.callback.namespace].get(task.callback.name);
+        const id = this.env[task.callback.namespace].idFromName(task.callback.name);
+        //@ts-expect-error yeah whatever
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const stub = this.env[task.callback.namespace].get(id);
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        stub[task.callback.function](task.payload).catch((e: unknown) => {
+        stub[task.callback.function](task).catch((e: unknown) => {
           console.error("Error executing durable object function:", e);
         });
       } else if (type === "service") {
         //@ts-expect-error  yeah whatever
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        this.env[task.callback.service][task.callback.function](task.payload);
+        this.env[task.callback.service][task.callback.function](task);
       } else {
         console.error("unknown callback type", task);
       }
