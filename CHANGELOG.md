@@ -1,5 +1,11 @@
 # durable-scheduler
 
+## 0.0.6
+
+### Patch Changes
+
+- [`d606dc9`](https://github.com/threepointone/durable-scheduler/commit/d606dc9285c320aa4fc92acfb5108e36b19126a4) Thanks [@threepointone](https://github.com/threepointone)! - do a release
+
 ## 0.0.5
 
 ### Patch Changes
