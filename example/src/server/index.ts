@@ -12,6 +12,8 @@ export { Scheduler };
 
 type Env = {
   OPENAI_API_KEY: string;
+  AI_GATEWAY_URL: string;
+  AI_GATEWAY_TOKEN: string;
   AI: Ai;
   Scheduler: DurableObjectNamespace<Scheduler<Env>>;
   ToDos: DurableObjectNamespace<ToDos>;
@@ -67,6 +69,11 @@ const taskSchema = z
 
 export class ToDos extends Server<Env> {
   openai = createOpenAI({
+    baseURL: this.env.AI_GATEWAY_URL,
+    headers: {
+      Authorization: `Bearer ${this.env.OPENAI_API_KEY}`,
+      "cf-aig-authorization": `Bearer ${this.env.AI_GATEWAY_TOKEN}`,
+    },
     apiKey: this.env.OPENAI_API_KEY,
   });
   constructor(ctx: DurableObjectState, env: Env) {
