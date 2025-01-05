@@ -1,4 +1,4 @@
-_(wip, do not use)_
+**Renamed to partywhen, work continues on this at https://github.com/threepointone/partyserver/tree/main/packages/partywhen** 
 
 ## durable-scheduler
 
